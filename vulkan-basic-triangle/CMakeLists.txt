@@ -5,8 +5,6 @@ project(hello_triangle)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR})
-set(GLFW_INCLUDE_DIR "C:/Users/phgph/Desktop/build-up-phase/glfw-3.4.bin.WIN64/include")
-set(GLFW_LIBRARY_DIR "C:/Users/phgph/Desktop/build-up-phase/glfw-3.4.bin.WIN64/lib-vc2022")
 
 add_executable(${PROJECT_NAME} main.cpp)
 
@@ -29,14 +27,22 @@ else()
         SPIRV-Tools-optd)
 endif()
 
+# GLFW를 FetchContent로 가져오기
+include(FetchContent)
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+  glfw
+  GIT_REPOSITORY https://github.com/glfw/glfw.git
+  GIT_TAG 3.4
+)
+FetchContent_MakeAvailable(glfw)
 
 include_directories(
-    ${GLFW_INCLUDE_DIR}
     $ENV{VULKAN_SDK}/Include
 )
 
-
-find_library(GLFW_LIB glfw3 PATHS ${GLFW_LIBRARY_DIR})
 find_library(VULKAN_LIB vulkan-1 PATHS $ENV{VULKAN_SDK}/Lib)
 
 set(GLSLANG_LIBS "")
@@ -50,7 +56,7 @@ foreach(LIB_NAME ${GLSLANG_LIB_NAMES})
 endforeach()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
-    ${GLFW_LIB}
+    glfw
     ${VULKAN_LIB}
     ${GLSLANG_LIBS}
 )
