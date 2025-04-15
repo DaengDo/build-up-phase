@@ -655,7 +655,8 @@ void createSyncObjects()
 std::tuple<VkBuffer, VkDeviceMemory> createBuffer(
     VkDeviceSize size, 
     VkBufferUsageFlags usage, 
-    VkMemoryPropertyFlags reqMemProps)
+    VkMemoryPropertyFlags reqMemProps,
+    VkMemoryPropertyFlags excMemProps = 0)
 {
     VkBuffer buffer;
     VkDeviceMemory bufferMemory;
@@ -674,16 +675,35 @@ std::tuple<VkBuffer, VkDeviceMemory> createBuffer(
         VkMemoryRequirements memRequirements;
         vkGetBufferMemoryRequirements(vk.device, buffer, &memRequirements);
         size = memRequirements.size;
-        std::bitset<32> isSuppoted(memRequirements.memoryTypeBits);
+        std::bitset<32> isSuppoted(memRequirements.memoryTypeBits); // 특정 비트에 해당하는 인덱스가 요구사항에 적합하다는 표시
 
-        VkPhysicalDeviceMemoryProperties spec;
+        VkPhysicalDeviceMemoryProperties spec; // 어떤 타입의 메모리를 지원하는지 spec.memoryTypes[i].propertyFlags 에 존재
         vkGetPhysicalDeviceMemoryProperties(vk.physicalDevice, &spec);
 
+        std::bitset<32> currentProps(VK_MEMORY_PROPERTY_FLAG_BITS_MAX_ENUM); // VkMemoryPropertyFlags 최대 비트 설정으로 초기화
+        uint currentMemoryIndex = 0;
+
         for (auto& [props, _] : std::span<VkMemoryType>(spec.memoryTypes, spec.memoryTypeCount)) {
-            if (isSuppoted[memTypeIndex] && (props & reqMemProps) == reqMemProps) {
-                break;
+            const bool isExcludedIndex = excMemProps != 0 && (props & excMemProps) == excMemProps;
+            const bool isSupportedIndex = isSuppoted[currentMemoryIndex];
+            const bool isRequiredProps = (props & reqMemProps) == reqMemProps;
+
+            // 조건 충족이 안될 경우 다음 메모리 검사
+            if (isExcludedIndex || !isSupportedIndex || !isRequiredProps) {
+                currentMemoryIndex += 1;
+                continue;
             }
-            ++memTypeIndex;
+
+            // 적합한 메모리인지 여부를 더 적은 플레그로 지원되는지 검사
+            std::bitset<32> propertiesBitset(props);
+            const bool isSuitable = currentProps.count() > propertiesBitset.count();
+            if (isSuitable){
+                memTypeIndex = currentMemoryIndex;
+                currentProps = propertiesBitset;
+            }
+
+            // 더 적합한 메모리가 있을지 모르니 다음 메모리 검사
+            currentMemoryIndex += 1;
         }
     }
 
@@ -736,7 +756,7 @@ void createVertexBuffer()
 
     void* dst;
     vkMapMemory(vk.device, vk.vertexBufferMemory, 0, size, 0, &dst);
-    memcpy(dst, data, size);  
+    memcpy(dst, data, size);
     vkUnmapMemory(vk.device, vk.vertexBufferMemory);
 }
 
@@ -770,7 +790,7 @@ void createIndexBuffer()
     memcpy(dst, data, size);
     vkUnmapMemory(vk.device, stagingBufferMemory);
 
-    copyBuffer(stagingBuffer, vk.indexBuffer, size);
+    copyBuffer(stagingBuffer, vk.indexBuffer, size); // indexBuffer 사용 직전에 vkQueueWaitIdle 하는 것이 당연하게도 더 좋음
 
     vkDestroyBuffer(vk.device, stagingBuffer, nullptr);
     vkFreeMemory(vk.device, stagingBufferMemory, nullptr);
